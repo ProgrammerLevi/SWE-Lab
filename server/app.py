@@ -1,4 +1,5 @@
 # Import necessary libraries and modules
+import os
 from bson.objectid import ObjectId
 from flask import Flask, request, jsonify
 from pymongo import MongoClient
@@ -8,8 +9,9 @@ import usersDatabase as usersDB
 import projectsDatabase as projectsDB
 import hardwareDatabase as hardwareDB
 
-# Define the MongoDB connection string
-MONGODB_SERVER = "your_mongodb_connection_string_here"
+# MongoDB connection string, read from the environment so credentials stay out of git
+# (falls back to a local MongoDB for development)
+MONGODB_SERVER = os.environ.get("MONGODB_SERVER", "mongodb://localhost:27017")
 
 # Initialize a new Flask web application
 app = Flask(__name__)
