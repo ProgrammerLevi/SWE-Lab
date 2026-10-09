@@ -1,5 +1,6 @@
 # Import necessary libraries and modules
 from pymongo import MongoClient
+from werkzeug.security import generate_password_hash, check_password_hash
 
 import projectsDatabase as projectsDB
 
@@ -7,8 +8,8 @@ import projectsDatabase as projectsDB
 Structure of User entry:
 User = {
     'username': username,
-    'userId': userId,
-    'password': password,
+    'userId': hashed userId (see encryption.py),
+    'password': hashed password (werkzeug),
     'projects': [project1_ID, project2_ID, ...]
 }
 '''
@@ -24,7 +25,7 @@ def addUser(client, username, userId, password):
 
     user = {'username': username,
             'userId': userId,
-            'password': password,
+            'password': generate_password_hash(password),
             'projects': []}
 
     users.insert_one(user)
@@ -46,7 +47,8 @@ def login(client, username, userId, password):
     if user is None:
         return False
 
-    return user['password'] == password
+    # Compare against the stored hash
+    return check_password_hash(user['password'], password)
 
 # Function to add a user to a project
 def joinProject(client, userId, projectId):
