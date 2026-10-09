@@ -13,6 +13,16 @@ import hardwareDatabase as hardwareDB
 # (falls back to a local MongoDB for development)
 MONGODB_SERVER = os.environ.get("MONGODB_SERVER", "mongodb://localhost:27017")
 
+# Demo mode: set USE_MOCK_DB=1 to use an in-memory fake MongoDB (no database needed).
+# All routes share one client so data persists between requests; close() is a no-op.
+if os.environ.get("USE_MOCK_DB"):
+    import mongomock
+    _mock_client = mongomock.MongoClient()
+    _mock_client.close = lambda: None
+
+    def MongoClient(*args, **kwargs):
+        return _mock_client
+
 # Initialize a new Flask web application
 app = Flask(__name__)
 
