@@ -1,7 +1,7 @@
 # Import necessary libraries and modules
 from pymongo import MongoClient
 
-import projectsDB
+import projectsDatabase as projectsDB
 
 '''
 Structure of User entry:
@@ -16,25 +16,75 @@ User = {
 # Function to add a new user
 def addUser(client, username, userId, password):
     # Add a new user to the database
-    pass
+    users = client['HardwareCheckout']['Users']
+    
+    # Prevent duplicate user IDs
+    if users.find_one({'userId': userId}) is not None:
+        return False
+
+    user = {'username': username,
+            'userId': userId,
+            'password': password,
+            'projects': []}
+
+    users.insert_one(user)
+    return True
 
 # Helper function to query a user by username and userId
 def __queryUser(client, username, userId):
     # Query and return a user from the database
-    pass
+    users = client['HardwareCheckout']['Users']
+
+    return users.find_one({'username': username,
+                           'userId': userId})
 
 # Function to log in a user
 def login(client, username, userId, password):
     # Authenticate a user and return login status
-    pass
+    user = __queryUser(client, username, userId)
+
+    if user is None:
+        return False
+
+    return user['password'] == password
 
 # Function to add a user to a project
 def joinProject(client, userId, projectId):
     # Add a user to a specified project
-    pass
+    users = client['HardwareCheckout']['Users']
+
+    user = users.find_one({'userId': userId})
+    if user is None:
+        return False
+
+    # Verify that the project exists
+    project = projectsDB.queryProject(client, projectId)
+    if project is None:
+        return False
+
+    # Avoid adding the same project twice
+    if projectId in user['projects']:
+        return False
+
+    # Add the project to the user
+    users.update_one({'userId': userId},
+                     {'$addToSet': {'projects': projectId}})
+
+    # Add the user to the project's membership list
+    if not projectsDB.addUser(client, projectId, userId):
+        # Roll back the user's project member if update fails
+        users.update_one({'userId': userId},
+                         {'$pull': {'projects': projectId}})
+        return False
+    return True
 
 # Function to get the list of projects for a user
 def getUserProjectsList(client, userId):
     # Get and return the list of projects a user is part of
-    pass
+    users = client['HardwareCheckout']['Users']
+    user = users.find_one({'userId': userId})
+
+    if user is None:
+        return None
+    return user['projects']
 
