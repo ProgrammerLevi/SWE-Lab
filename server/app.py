@@ -50,13 +50,12 @@ def login():
     # Extract data from request
     data = request.get_json(silent=True) or {}
     # Get specific data
-    username = data.get('username')
     userId = data.get('userId')
     password = data.get('password')
 
     # Check for errors
-    if not username or not userId or not password:
-        return jsonify({'success': False,'message': 'username, userId, and password are required'}), 400
+    if not userId or not password:
+        return jsonify({'success': False,'message': 'userId and password are required'}), 400
 
     # Hash the userId so it matches what's stored
     hashedId = protect_user_id(userId)
@@ -66,7 +65,7 @@ def login():
     try:
         client = MongoClient(MONGODB_SERVER)
         # Attempt to log in the user using the usersDB module
-        success = usersDB.login(client, username, hashedId, password)
+        success = usersDB.login(client, hashedId, password)
     # Catch error
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
@@ -76,7 +75,7 @@ def login():
             client.close()
     # Return a JSON response
     if success:
-        return jsonify({'success': True, 'message': 'Login successful','username': username, 'userId': userId}), 200
+        return jsonify({'success': True, 'message': 'Login successful', 'userId': userId}), 200
     else:
         return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
 

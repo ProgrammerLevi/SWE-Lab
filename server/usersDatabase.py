@@ -31,18 +31,17 @@ def addUser(client, username, userId, password):
     users.insert_one(user)
     return True
 
-# Helper function to query a user by username and userId
-def __queryUser(client, username, userId):
+# Helper function to query a user by userId
+def __queryUser(client, userId):
     # Query and return a user from the database
     users = client['HardwareCheckout']['Users']
 
-    return users.find_one({'username': username,
-                           'userId': userId})
+    return users.find_one({'userId': userId})
 
 # Function to log in a user
-def login(client, username, userId, password):
+def login(client, userId, password):
     # Authenticate a user and return login status
-    user = __queryUser(client, username, userId)
+    user = __queryUser(client, userId)
 
     if user is None:
         return False
