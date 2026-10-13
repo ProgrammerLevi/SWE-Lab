@@ -37,44 +37,61 @@ def returnUnits(client, hwSetName, qty):
 # Function to query a project by its ID
 def queryProject(client, projectId):
     # Query and return a project from the database
-    return getCollection(client).find_one({'projectId': projectId})
+    db = client["HardwareCheckout"]
+    projects = db["Projects"]
+
+    # matching ID
+    project = projects.find_one({"projectId" : projectId})
+
+    return project
 
 # Function to create a new project
 def createProject(client, projectName, projectId, description):
     # Create a new project in the database
-    # Check if the name or ID is invalid
-    if not projectName or not projectId:
+    db = client["HardwareCheckout"]
+    projects = db["Projects"]
+
+    # check if exists
+    if queryProject(client, projectId) is not None:
         return False
 
-    projects = getCollection(client)
+    # create a new project
+    project = {
+        "projectName": projectName,
+        "projectId": projectId,
+        "description": description,
+        "hwSets": {},
+        "users": []
+    }
 
-    # Unique index so two projects can't share an ID
-    projects.create_index('projectId', unique=True)
+    # insert project
+    projects.insert_one(project)
 
-    try:
-        projects.insert_one({
-            'projectName': projectName,
-            'projectId': projectId,
-            'description': description or '',
-            'hwSets': {},
-            'users': []
-        })
-    except DuplicateKeyError:
-        return False
     return True
 
 # Function to add a user to a project
 def addUser(client, projectId, userId):
-    # Add a user to the specified project
-    if not userId:
+    # add user
+    db = client["HardwareCheckout"]
+    projects = db["Projects"]
+
+    # find project
+    project = queryProject(client, projectId)
+
+    if project is None:
         return False
 
-    # $addToSet keeps the list free of duplicates
-    result = getCollection(client).update_one(
-        {'projectId': projectId},
-        {'$addToSet': {'users': userId}}
+    # is user alr in project
+    if userId in project["users"]:
+        return False
+
+    # add project to list
+    projects.update_one(
+        {"projectId": projectId},
+        {"$push": {"users": userId}}
     )
-    return result.matched_count == 1
+
+    return True
 
 # Function to update hardware usage in a project
 def updateUsage(client, projectId, hwSetName, delta):
