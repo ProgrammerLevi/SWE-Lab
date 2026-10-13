@@ -9,7 +9,7 @@ import projectsDatabase as projectsDB
 import hardwareDatabase as hardwareDB
 
 # Define the MongoDB connection string
-MONGODB_SERVER = "your_mongodb_connection_string_here"
+MONGODB_SERVER = "mongodb+srv://Admin:xshfdkfdfgdf6iXg@cluster0.gqr93yv.mongodb.net/?appName=Cluster0"
 
 # Initialize a new Flask web application
 app = Flask(__name__)
