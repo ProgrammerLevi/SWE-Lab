@@ -8,6 +8,7 @@ from pymongo import MongoClient
 import usersDatabase as usersDB
 import projectsDatabase as projectsDB
 import hardwareDatabase as hardwareDB
+from encryption import protect_user_id
 
 # MongoDB connection string, read from the environment so credentials stay out of git
 # (falls back to a local MongoDB for development)
@@ -47,13 +48,15 @@ def login():
     if not username or not userId or not password:
         return jsonify({'success': False,'message': 'username, userId, and password are required'}), 400
 
+    # Hash the userId so it matches what's stored
+    hashedId = protect_user_id(userId)
     client = None
 
     # Connect to MongoDB
     try:
         client = MongoClient(MONGODB_SERVER)
         # Attempt to log in the user using the usersDB module
-        success = usersDB.login(client, username, userId, password)
+        success = usersDB.login(client, username, hashedId, password)
     # Catch error
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
@@ -76,13 +79,14 @@ def mainPage():
     if not userId:
         return jsonify({'success': False, 'message': 'userId is required'}), 400
 
+    hashedId = protect_user_id(userId)
     client = None
     try:
         # Connect to MongoDB
         client = MongoClient(MONGODB_SERVER)
 
         # Fetch user projects using the usersDB module
-        projects = usersDB.getUserProjectsList(client, userId)
+        projects = usersDB.getUserProjectsList(client, hashedId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
     finally:
@@ -107,13 +111,14 @@ def join_project():
         return jsonify({'success': False,
                         'message': 'userId and projectId are required'}), 400
 
+    hashedId = protect_user_id(userId)
     client = None
     try:
         # Connect to MongoDB
         client = MongoClient(MONGODB_SERVER)
 
         # Attempt to join the project using the usersDB module
-        success = usersDB.joinProject(client, userId, projectId)
+        success = usersDB.joinProject(client, hashedId, projectId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
     finally:
@@ -141,13 +146,14 @@ def add_user():
         return jsonify({'success': False,
                         'message': 'username, userId, and password are required'}), 400
 
+    hashedId = protect_user_id(userId)
     client = None
     try:
         # Connect to MongoDB
         client = MongoClient(MONGODB_SERVER)
 
         # Attempt to add the user using the usersDB module
-        success = usersDB.addUser(client, username, userId, password)
+        success = usersDB.addUser(client, username, hashedId, password)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
     finally:
@@ -170,14 +176,15 @@ def get_user_projects_list():
  
     if not userId:
         return jsonify({'success': False, 'message': 'userId is required'}), 400
- 
+
+    hashedId = protect_user_id(userId)
     client = None
     try:
         # Connect to MongoDB
         client = MongoClient(MONGODB_SERVER)
- 
+
         # Fetch the user's projects using the usersDB module
-        projects = usersDB.getUserProjectsList(client, userId)
+        projects = usersDB.getUserProjectsList(client, hashedId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
     finally:
@@ -214,7 +221,7 @@ def create_project():
  
         # If created and we know who made it, add the creator as a member
         if success and userId:
-            usersDB.joinProject(client, userId, projectId)
+            usersDB.joinProject(client, protect_user_id(userId), projectId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
     finally:
@@ -332,7 +339,7 @@ def check_out():
         client = MongoClient(MONGODB_SERVER)
  
         # Attempt to check out the hardware using the projectsDB module
-        success = projectsDB.checkOutHW(client, projectId, hwSetName, qty, userId)
+        success = projectsDB.checkOutHW(client, projectId, hwSetName, qty, protect_user_id(userId))
  
         # Grab the updated availability so the UI can refresh immediately
         hw_set = hardwareDB.queryHardwareSet(client, hwSetName)
@@ -377,7 +384,7 @@ def check_in():
         client = MongoClient(MONGODB_SERVER)
  
         # Attempt to check in the hardware using the projectsDB module
-        success = projectsDB.checkInHW(client, projectId, hwSetName, qty, userId)
+        success = projectsDB.checkInHW(client, projectId, hwSetName, qty, protect_user_id(userId))
  
         # Grab the updated availability so the UI can refresh immediately
         hw_set = hardwareDB.queryHardwareSet(client, hwSetName)

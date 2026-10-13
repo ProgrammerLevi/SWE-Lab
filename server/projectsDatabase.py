@@ -1,7 +1,7 @@
 # Import necessary libraries and modules
 from pymongo import MongoClient
 
-import hardwareDB
+import hardwareDatabase as hardwareDB
 
 '''
 Structure of Project entry:
@@ -37,7 +37,7 @@ def createProject(client, projectName, projectId, description):
         return False 
     
     # create a new project 
-     project = {
+    project = {
         "projectName": projectName,
         "projectId": projectId,
         "description": description,
