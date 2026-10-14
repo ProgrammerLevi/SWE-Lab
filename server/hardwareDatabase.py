@@ -56,13 +56,11 @@ def updateAvailability(client, hwSetName, newAvailability):
     # Check if the set doesn't exist or the value is invalid
     if not isInt(newAvailability) or newAvailability < 0:
         return False
-    pass
 
     hw = getCollection(client)
     hw_set = hw.find_one({'hwName': hwSetName})
     if hw_set is None or newAvailability > hw_set['capacity']:
         return False
- 
     result = hw.update_one(
         {'hwName': hwSetName},
         {'$set': {'availability': newAvailability}}

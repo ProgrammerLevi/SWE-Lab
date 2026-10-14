@@ -2,6 +2,7 @@
 import os
 from bson.objectid import ObjectId
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from pymongo import MongoClient
 
 # Import custom modules for database interactions
@@ -12,10 +13,11 @@ from encryption import protect_user_id
 
 # MongoDB connection string, read from the environment so credentials stay out of git
 # (falls back to a local MongoDB for development)
-MONGODB_SERVER = os.environ.get("MONGODB_SERVER", "mongodb://localhost:27017")
+MONGODB_SERVER = os.environ.get("MONGODB_SERVER", "mongodb+srv://Admin:xshfdkfdfgdf6iXg@cluster0.gqr93yv.mongodb.net/?appName=Cluster0")
 
 # Initialize a new Flask web application
 app = Flask(__name__)
+CORS(app)
 
 # Helper function, checks if MongoDB document contains ObjectId in '_id'
 def clean_doc(doc):
