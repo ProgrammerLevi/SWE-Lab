@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import FormField from './FormField';
-import { createProject, getProject } from '../api/projects';
+import { createProject, getProject, getUserProjects, joinProject } from '../api/projects';
 
 // "Create new project" and "Use existing project" forms (Figure 2 of the spec).
-// Owns only form state and feedback; once a project is loaded it is handed to
-// the parent through onSelect(project).
-export default function Project({ onSelect }) {
+// Owns only form state and feedback. Both actions are done on behalf of userId
+// (the creator / joiner becomes a project member), and once a project is ready
+// it is handed to the parent through onSelect(project).
+export default function Project({ userId, onSelect }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [newId, setNewId] = useState('');
@@ -35,12 +36,12 @@ export default function Project({ onSelect }) {
       return;
     }
     run(async () => {
-      await createProject(projectName, projectId, description.trim());
-      onSelect(await getProject(projectId));
-      setStatus({ ok: true, text: `Created project ${projectId}.` });
+      await createProject(projectName, projectId, description.trim(), userId);
+      const project = await getProject(projectId);
       setName('');
       setDescription('');
       setNewId('');
+      onSelect(project);
     });
   }
 
@@ -52,9 +53,15 @@ export default function Project({ onSelect }) {
       return;
     }
     run(async () => {
-      onSelect(await getProject(projectId));
-      setStatus({ ok: true, text: `Loaded project ${projectId}.` });
+      // Look the project up first so a typo says "Project not found"
+      const project = await getProject(projectId);
+
+      // The backend refuses to join a project you're already in, so only join if needed
+      const mine = await getUserProjects(userId);
+      if (!mine.includes(projectId)) await joinProject(userId, projectId);
+
       setExistingId('');
+      onSelect(project);
     });
   }
 
