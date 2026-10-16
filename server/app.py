@@ -12,6 +12,9 @@ from encryption import protect_user_id
 
 # MongoDB connection string, read from the environment so credentials stay out of git
 # (falls back to a local MongoDB for development)
+from dotenv import load_dotenv
+load_dotenv()
+
 MONGODB_SERVER = os.environ.get("MONGODB_SERVER", "mongodb://localhost:27017")
 
 # Demo mode: set USE_MOCK_DB=1 to use an in-memory fake MongoDB (no database needed).
@@ -474,4 +477,3 @@ def check_inventory():
 # Main entry point for the application
 if __name__ == '__main__':
     app.run()
-
