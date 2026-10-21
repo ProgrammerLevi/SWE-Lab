@@ -46,7 +46,7 @@ export default function Modal({ open, title, onClose, children }) {
     // Remember what had focus so it can get it back when the dialog closes
     const previouslyFocused = document.activeElement;
 
-    // Focus the first field inside the dialog (or the dialog itself)
+    // Focus the first field inside the dialog
     const firstField = dialogRef.current?.querySelector('input, select, textarea');
     (firstField || dialogRef.current)?.focus();
 
@@ -66,7 +66,7 @@ export default function Modal({ open, title, onClose, children }) {
   if (!open) return null;
 
   return (
-    // Clicking the dim backdrop closes; clicks inside the dialog are stopped from reaching it
+    // Clicking the dim backdrop closes
     <div style={backdropStyle} onMouseDown={onClose}>
       <div
         className="card"
