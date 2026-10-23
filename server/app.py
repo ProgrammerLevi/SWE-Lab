@@ -47,6 +47,25 @@ def parse_qty(value):
         return None
     return qty if qty > 0 else None
 
+DEFAULT_HW_SETS = {'HWSet1': 100, 'HWSet2': 100}
+
+def seed_hardware_sets():
+    client = None
+    try:
+        client = MongoClient(MONGODB_SERVER, serverSelectionTimeoutMS=3000)
+        for hwSetName, capacity in DEFAULT_HW_SETS.items():
+            # does nothing if the set already exists, so availability isn't reset on restart
+            hardwareDB.createHardwareSet(client, hwSetName, capacity)
+    except Exception as e:
+        print(f'Could not seed hardware sets: {e}')
+    finally:
+        if client is not None:
+            client.close()
+
+# runs on import so it works under gunicorn too; tests can set SKIP_SEED=1
+if not os.environ.get('SKIP_SEED'):
+    seed_hardware_sets()
+
 # Route for user login
 @app.route('/login', methods=['POST'])
 def login():

@@ -1,14 +1,13 @@
 // Route /projects. Project area from Figure 2 (needs a logged-in user):
 // the user's projects, the create / use-existing project forms, and the hardware
-// sets in the system (with a form to add sets such as HWSet1 and HWSet2).
+// sets in the system (HWSet1 and HWSet2, created by the server).
 // Everything shown here comes from the database; nothing is hard-coded.
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import HardwareSetForm from '../components/HardwareSetForm';
 import HardwareSetList from '../components/HardwareSetList';
 import Navbar from '../components/Navbar';
 import Project from '../components/Project';
-import { createHardwareSet, getAllHardwareSets } from '../api/hardware';
+import { getAllHardwareSets } from '../api/hardware';
 import { getProject, getUserProjects } from '../api/projects';
 import { useAuth } from '../context/AuthContext';
 
@@ -51,12 +50,6 @@ export default function MyUserPortal() {
   useEffect(() => { loadProjects(); }, [loadProjects]);
   useEffect(() => { loadHardware(); }, [loadHardware]);
 
-  // HardwareSetForm shows its own success/error message from this promise
-  async function handleCreateHardwareSet(name, capacity) {
-    await createHardwareSet(name, capacity);
-    await loadHardware();
-  }
-
   return (
     <>
       <Navbar />
@@ -93,7 +86,6 @@ export default function MyUserPortal() {
         <section className="card">
           <h2>Hardware sets</h2>
           {hwError ? <p className="msg err">{hwError}</p> : <HardwareSetList sets={hwSets} />}
-          <HardwareSetForm title="Add a hardware set" onSubmit={handleCreateHardwareSet} />
         </section>
       </main>
     </>
