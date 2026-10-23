@@ -17,6 +17,9 @@ load_dotenv()
 
 MONGODB_SERVER = os.environ.get("MONGODB_SERVER", "mongodb://localhost:27017")
 
+# Enables secure SSL verification for MongoDB connections
+MONGODB_CA_FILE = os.environ.get("SSL_CERT_FILE")
+
 # Demo mode: set USE_MOCK_DB=1 to use an in-memory fake MongoDB (no database needed).
 # All routes share one client so data persists between requests; close() is a no-op.
 if os.environ.get("USE_MOCK_DB"):
@@ -66,7 +69,7 @@ def login():
 
     # Connect to MongoDB
     try:
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
         # Attempt to log in the user using the usersDB module
         success = usersDB.login(client, hashedId, password)
     # Catch error
@@ -95,7 +98,7 @@ def mainPage():
     client = None
     try:
         # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
 
         # Fetch user projects using the usersDB module
         projects = usersDB.getUserProjectsList(client, hashedId)
@@ -127,7 +130,7 @@ def join_project():
     client = None
     try:
         # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
 
         # Attempt to join the project using the usersDB module
         success = usersDB.joinProject(client, hashedId, projectId)
@@ -162,7 +165,7 @@ def add_user():
     client = None
     try:
         # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
 
         # Attempt to add the user using the usersDB module
         success = usersDB.addUser(client, username, hashedId, password)
@@ -193,7 +196,7 @@ def get_user_projects_list():
     client = None
     try:
         # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
 
         # Fetch the user's projects using the usersDB module
         projects = usersDB.getUserProjectsList(client, hashedId)
@@ -226,7 +229,7 @@ def create_project():
     client = None
     try:
         # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
  
         # Attempt to create the project using the projectsDB module
         success = projectsDB.createProject(client, projectName, projectId, description)
@@ -260,7 +263,7 @@ def get_project_info():
     client = None
     try:
         # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
  
         # Fetch project information using the projectsDB module
         project = projectsDB.queryProject(client, projectId)
@@ -282,7 +285,7 @@ def get_all_hw_names():
     client = None
     try:
         # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
  
         # Fetch all hardware names using the hardwareDB module
         hw_names = hardwareDB.getAllHwNames(client)
@@ -309,7 +312,7 @@ def get_hw_info():
     client = None
     try:
         # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
  
         # Fetch hardware set information using the hardwareDB module
         hw_set = hardwareDB.queryHardwareSet(client, hwSetName)
@@ -348,7 +351,7 @@ def check_out():
     client = None
     try:
         # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
  
         # Attempt to check out the hardware using the projectsDB module
         success = projectsDB.checkOutHW(client, projectId, hwSetName, qty, protect_user_id(userId))
@@ -393,7 +396,7 @@ def check_in():
     client = None
     try:
         # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
  
         # Attempt to check in the hardware using the projectsDB module
         success = projectsDB.checkInHW(client, projectId, hwSetName, qty, protect_user_id(userId))
@@ -435,7 +438,7 @@ def create_hardware_set():
     client = None
     try:
         # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
  
         # Attempt to create the hardware set using the hardwareDB module
         success = hardwareDB.createHardwareSet(client, hwSetName, initCapacity)
@@ -460,7 +463,7 @@ def check_inventory():
     client = None
     try:
         # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER)
+        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
  
         # Fetch all projects
         projects = [clean_doc(p) for p in client['HardwareCheckout']['Projects'].find({})]
