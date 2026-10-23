@@ -5,7 +5,6 @@
 // If already signed in, redirects to /projects.
 import React, { useCallback, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import DevLogin from '../components/DevLogin';
 import FormField from '../components/FormField';
 import Modal from '../components/Modal';
 import MyRegistrationPage from './MyRegistrationPage';
@@ -89,7 +88,6 @@ export default function MyLoginPage() {
         <MyRegistrationPage onDone={handleRegistered} />
       </Modal>
 
-      <DevLogin />
     </main>
   );
 }
