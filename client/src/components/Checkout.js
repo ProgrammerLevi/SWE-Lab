@@ -91,7 +91,7 @@ export default function Checkout({ projectId, userId }) {
 
       {sets.length === 0 ? (
         <p className="muted">
-          No hardware sets exist yet. Add one from the Hardware sets panel on the My projects page.
+          No hardware sets found. Make sure the server is running and connected to the database.
         </p>
       ) : (
         <div style={{ overflowX: 'auto' }}>

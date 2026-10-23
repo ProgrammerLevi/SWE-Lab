@@ -20,6 +20,3 @@ export const checkOut = (projectId, hwSetName, userId, qty) =>
 
 export const checkIn = (projectId, hwSetName, userId, qty) =>
   post('/check_in', { projectId, hwSetName, userId, qty });
-
-// TODO: remove HW_SETS / createHardwareSet seeding from App.js (hard-coded data);
-// list sets with getAllHardwareSets() instead.
