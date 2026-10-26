@@ -5,10 +5,17 @@ import { post } from './http';
 export const createProject = (projectName, projectId, description, userId) =>
   post('/create_project', { projectName, projectId, description, userId });
 
-// Returns the project document: { projectName, projectId, description, hwSets, users }
+// Returns the project document: { projectName, projectId, description, hwSets, users, ownerName }
 export async function getProject(projectId) {
   const { project } = await post('/get_project_info', { projectId });
   return project;
+}
+
+// Returns { owned, shared }: full project documents (with ownerName) the user belongs to,
+// split by whether the user created them.
+export async function getProjectsByOwnership(userId) {
+  const { owned, shared } = await post('/get_user_projects', { userId });
+  return { owned, shared };
 }
 
 // Adds the user to an existing project. Rejects when the project doesn't exist.

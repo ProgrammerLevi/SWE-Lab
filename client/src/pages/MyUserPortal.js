@@ -1,6 +1,7 @@
 // Route /projects. Project area from Figure 2 (needs a logged-in user):
-// the user's projects, the create / use-existing project forms, and the hardware
-// sets in the system (HWSet1 and HWSet2, created by the server).
+// the projects the user owns, the projects shared with them, the create /
+// use-existing project forms, and the hardware sets in the system (HWSet1 and
+// HWSet2, created by the server).
 // Everything shown here comes from the database; nothing is hard-coded.
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -8,29 +9,51 @@ import HardwareSetList from '../components/HardwareSetList';
 import Navbar from '../components/Navbar';
 import Project from '../components/Project';
 import { getAllHardwareSets } from '../api/hardware';
-import { getProject, getUserProjects } from '../api/projects';
+import { getProjectsByOwnership } from '../api/projects';
 import { useAuth } from '../context/AuthContext';
+
+// One section of projects. showOwner is off for "My projects", where the owner is always you.
+function ProjectSection({ title, projects, loading, error, emptyText, showOwner }) {
+  return (
+    <section className="card">
+      <h2>{title}</h2>
+      {loading && <p className="muted">Loading...</p>}
+      {error && <p className="msg err">{error}</p>}
+      {!loading && !error && projects.length === 0 && <p className="muted">{emptyText}</p>}
+      {projects.length > 0 && (
+        <ul>
+          {projects.map((p) => (
+            <li key={p.projectId}>
+              <Link to={`/projects/${encodeURIComponent(p.projectId)}`}>
+                <strong>{p.projectName}</strong>
+              </Link>
+              <span className="muted"> ({p.projectId})</span>
+              {showOwner && <span className="muted"> · Owner: {p.ownerName || 'Unknown'}</span>}
+              {p.description && <div className="muted">{p.description}</div>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 export default function MyUserPortal() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [projects, setProjects] = useState([]);
+  const [projects, setProjects] = useState({ owned: [], shared: [] });
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [projectsError, setProjectsError] = useState(null);
 
   const [hwSets, setHwSets] = useState([]);
   const [hwError, setHwError] = useState(null);
 
-  // The user record holds project IDs; fetch each project for its name and description
   const loadProjects = useCallback(async () => {
     setProjectsLoading(true);
     setProjectsError(null);
     try {
-      const ids = await getUserProjects(user.userId);
-      // One missing project shouldn't break the whole list, so skip ones that fail
-      const results = await Promise.allSettled(ids.map((id) => getProject(id)));
-      setProjects(results.filter((r) => r.status === 'fulfilled').map((r) => r.value));
+      setProjects(await getProjectsByOwnership(user.userId));
     } catch (err) {
       setProjectsError(err.message);
     } finally {
@@ -56,27 +79,22 @@ export default function MyUserPortal() {
       <main>
         <h1>Projects</h1>
 
-        <section className="card">
-          <h2>My projects</h2>
-          {projectsLoading && <p className="muted">Loading...</p>}
-          {projectsError && <p className="msg err">{projectsError}</p>}
-          {!projectsLoading && !projectsError && projects.length === 0 && (
-            <p className="muted">You aren't in any projects yet. Create one or use an existing one below.</p>
-          )}
-          {projects.length > 0 && (
-            <ul>
-              {projects.map((p) => (
-                <li key={p.projectId}>
-                  <Link to={`/projects/${encodeURIComponent(p.projectId)}`}>
-                    <strong>{p.projectName}</strong>
-                  </Link>
-                  <span className="muted"> ({p.projectId})</span>
-                  {p.description && <div className="muted">{p.description}</div>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <ProjectSection
+          title="My projects"
+          projects={projects.owned}
+          loading={projectsLoading}
+          error={projectsError}
+          emptyText="You haven't created any projects yet. Create one below."
+        />
+
+        <ProjectSection
+          title="Shared projects"
+          projects={projects.shared}
+          loading={projectsLoading}
+          error={projectsError}
+          emptyText="No one has shared a project with you yet. Use an existing project ID below to join one."
+          showOwner
+        />
 
         <Project
           userId={user.userId}

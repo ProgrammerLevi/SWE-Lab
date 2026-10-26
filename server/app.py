@@ -45,6 +45,11 @@ def clean_doc(doc):
         doc['_id'] = str(doc['_id'])
     return doc
 
+# Helper function, cleans project documents and adds the owner's display name
+def with_owner_names(projects):
+    names = usersDB.getUsernames(client, {projectsDB.getOwner(p) for p in projects})
+    return [dict(clean_doc(p), ownerName=names.get(projectsDB.getOwner(p))) for p in projects]
+
 # Helper function, parse a positive number from request data
 def parse_qty(value):
     try:
@@ -191,6 +196,31 @@ def get_user_projects_list():
         return jsonify({'success': False, 'message': 'User not found'}), 404
     return jsonify({'success': True, 'projects': projects}), 200
 
+# Route for getting the user's projects with details, split into owned and shared
+@app.route('/get_user_projects', methods=['POST'])
+def get_user_projects():
+    # Extract data from request
+    data = request.get_json(silent=True) or {}
+    userId = data.get('userId')
+
+    if not userId:
+        return jsonify({'success': False, 'message': 'userId is required'}), 400
+
+    hashedId = protect_user_id(userId)
+    try:
+        # Fetch the user's project IDs, then all of those projects in one query
+        projectIds = usersDB.getUserProjectsList(client, hashedId)
+        if projectIds is None:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        projects = with_owner_names(projectsDB.queryProjects(client, projectIds))
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
+
+    # Return a JSON response
+    owned = [p for p in projects if projectsDB.getOwner(p) == hashedId]
+    shared = [p for p in projects if projectsDB.getOwner(p) != hashedId]
+    return jsonify({'success': True, 'owned': owned, 'shared': shared}), 200
+
 # Route for creating a new project
 @app.route('/create_project', methods=['POST'])
 def create_project():
@@ -199,19 +229,20 @@ def create_project():
     projectName = data.get('projectName')
     projectId = data.get('projectId')
     description = data.get('description', '')
-    userId = data.get('userId')  # optional: the creator is added to the project
- 
+    userId = data.get('userId')  # optional: the creator owns and is added to the project
+
     if not projectName or not projectId:
         return jsonify({'success': False,
                         'message': 'projectName and projectId are required'}), 400
- 
+
+    owner = protect_user_id(userId) if userId else None
     try:
         # Attempt to create the project using the projectsDB module
-        success = projectsDB.createProject(client, projectName, projectId, description)
- 
+        success = projectsDB.createProject(client, projectName, projectId, description, owner)
+
         # If created and we know who made it, add the creator as a member
-        if success and userId:
-            usersDB.joinProject(client, protect_user_id(userId), projectId)
+        if success and owner:
+            usersDB.joinProject(client, owner, projectId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
  
@@ -234,13 +265,15 @@ def get_project_info():
     try:
         # Fetch project information using the projectsDB module
         project = projectsDB.queryProject(client, projectId)
+        if project is not None:
+            project = with_owner_names([project])[0]
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
- 
+
     # Return a JSON response
     if project is None:
         return jsonify({'success': False, 'message': 'Project not found'}), 404
-    return jsonify({'success': True, 'project': clean_doc(project)}), 200
+    return jsonify({'success': True, 'project': project}), 200
 
 # Route for getting all hardware names
 @app.route('/get_all_hw_names', methods=['POST'])

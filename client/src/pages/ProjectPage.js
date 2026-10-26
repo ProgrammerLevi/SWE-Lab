@@ -48,6 +48,7 @@ export default function ProjectPage() {
         <h1>{project.projectName}</h1>
         <p className="muted">
           Project ID: {project.projectId}
+          {project.ownerName && ` · Owner: ${project.ownerName}`}
           {memberCount > 0 && ` · ${memberCount} member${memberCount === 1 ? '' : 's'}`}
         </p>
         {project.description && <p>{project.description}</p>}

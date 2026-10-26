@@ -11,7 +11,8 @@ Project = {
     'projectId': projectId,
     'description': description,
     'hwSets': {HW1: 0, HW2: 10, ...},
-    'users': [user1, user2, ...]
+    'users': [user1, user2, ...],
+    'owner': hashed userId of the creator
 }
 '''
 # Database and collection names
@@ -45,8 +46,18 @@ def queryProject(client, projectId):
 
     return project
 
+# Function to query several projects at once, in the order of projectIds
+def queryProjects(client, projectIds):
+    found = {p['projectId']: p for p in getCollection(client).find({'projectId': {'$in': projectIds}})}
+    return [found[pid] for pid in projectIds if pid in found]
+
+# Helper function: the project's owner. Projects made before owners were stored
+# fall back to their first member, which is the creator
+def getOwner(project):
+    return project.get('owner') or next(iter(project.get('users') or []), None)
+
 # Function to create a new project
-def createProject(client, projectName, projectId, description):
+def createProject(client, projectName, projectId, description, owner=None):
     # Create a new project in the database
     db = client["HardwareCheckout"]
     projects = db["Projects"]
@@ -61,7 +72,8 @@ def createProject(client, projectName, projectId, description):
         "projectId": projectId,
         "description": description,
         "hwSets": {},
-        "users": []
+        "users": [],
+        "owner": owner
     }
 
     # insert project

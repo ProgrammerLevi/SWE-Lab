@@ -89,3 +89,10 @@ def getUserProjectsList(client, userId):
         return None
     return user['projects']
 
+# Function to look up the display names for a list of userIds
+def getUsernames(client, userIds):
+    # Return {userId: username} for the users that exist
+    users = client['HardwareCheckout']['Users']
+    found = users.find({'userId': {'$in': list(userIds)}}, {'userId': 1, 'username': 1})
+    return {u['userId']: u['username'] for u in found}
+
