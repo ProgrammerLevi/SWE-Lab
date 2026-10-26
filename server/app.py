@@ -30,6 +30,9 @@ if os.environ.get("USE_MOCK_DB"):
     def MongoClient(*args, **kwargs):
         return _mock_client
 
+# One shared client for the whole app. MongoClient keeps a pool of open connections,
+client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
+
 # Initialize a new Flask web application
 app = Flask(__name__)
 
@@ -53,17 +56,12 @@ def parse_qty(value):
 DEFAULT_HW_SETS = {'HWSet1': 100, 'HWSet2': 100}
 
 def seed_hardware_sets():
-    client = None
     try:
-        client = MongoClient(MONGODB_SERVER, serverSelectionTimeoutMS=3000)
         for hwSetName, capacity in DEFAULT_HW_SETS.items():
             # does nothing if the set already exists, so availability isn't reset on restart
             hardwareDB.createHardwareSet(client, hwSetName, capacity)
     except Exception as e:
         print(f'Could not seed hardware sets: {e}')
-    finally:
-        if client is not None:
-            client.close()
 
 # runs on import so it works under gunicorn too; tests can set SKIP_SEED=1
 if not os.environ.get('SKIP_SEED'):
@@ -84,20 +82,14 @@ def login():
 
     # Hash the userId so it matches what's stored
     hashedId = protect_user_id(userId)
-    client = None
 
-    # Connect to MongoDB
     try:
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
         # Attempt to log in the user using the usersDB module
         success = usersDB.login(client, hashedId, password)
     # Catch error
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
+
     # Return a JSON response
     if success:
         return jsonify({'success': True, 'message': 'Login successful', 'userId': userId}), 200
@@ -114,19 +106,11 @@ def mainPage():
         return jsonify({'success': False, 'message': 'userId is required'}), 400
 
     hashedId = protect_user_id(userId)
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
-
         # Fetch user projects using the usersDB module
         projects = usersDB.getUserProjectsList(client, hashedId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
 
     # Return a JSON response
     if projects is None:
@@ -146,19 +130,11 @@ def join_project():
                         'message': 'userId and projectId are required'}), 400
 
     hashedId = protect_user_id(userId)
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
-
         # Attempt to join the project using the usersDB module
         success = usersDB.joinProject(client, hashedId, projectId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
 
     # Return a JSON response
     if success:
@@ -181,19 +157,11 @@ def add_user():
                         'message': 'username, userId, and password are required'}), 400
 
     hashedId = protect_user_id(userId)
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
-
         # Attempt to add the user using the usersDB module
         success = usersDB.addUser(client, username, hashedId, password)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
 
     # Return a JSON response
     if success:
@@ -212,19 +180,11 @@ def get_user_projects_list():
         return jsonify({'success': False, 'message': 'userId is required'}), 400
 
     hashedId = protect_user_id(userId)
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
-
         # Fetch the user's projects using the usersDB module
         projects = usersDB.getUserProjectsList(client, hashedId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     if projects is None:
@@ -245,11 +205,7 @@ def create_project():
         return jsonify({'success': False,
                         'message': 'projectName and projectId are required'}), 400
  
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Attempt to create the project using the projectsDB module
         success = projectsDB.createProject(client, projectName, projectId, description)
  
@@ -258,10 +214,6 @@ def create_project():
             usersDB.joinProject(client, protect_user_id(userId), projectId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     if success:
@@ -279,19 +231,11 @@ def get_project_info():
     if not projectId:
         return jsonify({'success': False, 'message': 'projectId is required'}), 400
  
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Fetch project information using the projectsDB module
         project = projectsDB.queryProject(client, projectId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     if project is None:
@@ -301,19 +245,11 @@ def get_project_info():
 # Route for getting all hardware names
 @app.route('/get_all_hw_names', methods=['POST'])
 def get_all_hw_names():
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Fetch all hardware names using the hardwareDB module
         hw_names = hardwareDB.getAllHwNames(client)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     return jsonify({'success': True, 'hwNames': hw_names or []}), 200
@@ -328,19 +264,11 @@ def get_hw_info():
     if not hwSetName:
         return jsonify({'success': False, 'message': 'hwSetName is required'}), 400
  
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Fetch hardware set information using the hardwareDB module
         hw_set = hardwareDB.queryHardwareSet(client, hwSetName)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     if hw_set is None:
@@ -367,11 +295,7 @@ def check_out():
         return jsonify({'success': False,
                         'message': 'qty must be a positive whole number'}), 400
  
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Attempt to check out the hardware using the projectsDB module
         success = projectsDB.checkOutHW(client, projectId, hwSetName, qty, protect_user_id(userId))
  
@@ -379,10 +303,6 @@ def check_out():
         hw_set = hardwareDB.queryHardwareSet(client, hwSetName)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     availability = hw_set.get('availability') if hw_set else None
  
@@ -412,11 +332,7 @@ def check_in():
         return jsonify({'success': False,
                         'message': 'qty must be a positive whole number'}), 400
  
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Attempt to check in the hardware using the projectsDB module
         success = projectsDB.checkInHW(client, projectId, hwSetName, qty, protect_user_id(userId))
  
@@ -424,10 +340,6 @@ def check_in():
         hw_set = hardwareDB.queryHardwareSet(client, hwSetName)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     availability = hw_set.get('availability') if hw_set else None
  
@@ -454,19 +366,11 @@ def create_hardware_set():
         return jsonify({'success': False,
                         'message': 'initCapacity must be a positive whole number'}), 400
  
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Attempt to create the hardware set using the hardwareDB module
         success = hardwareDB.createHardwareSet(client, hwSetName, initCapacity)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     if success:
@@ -479,19 +383,11 @@ def create_hardware_set():
 # Route for checking the inventory of projects
 @app.route('/api/inventory', methods=['GET'])
 def check_inventory():
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Fetch all projects
         projects = [clean_doc(p) for p in client['HardwareCheckout']['Projects'].find({})]
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     return jsonify({'success': True, 'projects': projects}), 200
