@@ -32,6 +32,7 @@ const headerStyle = {
 const closeButtonStyle = {
   background: 'transparent',
   color: 'inherit',
+  border: 0,
   fontSize: 18,
   padding: '4px 8px',
 };

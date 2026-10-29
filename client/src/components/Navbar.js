@@ -1,57 +1,43 @@
 // Top bar shown on logged-in pages.
-// Shows the app title, the signed-in userId, a link to /projects and a Logout button
-// (calls signOut, then navigates to /login).
+// Shows the app title, links to the Projects and Create / Join pages, the signed-in
+// userId and a Logout button (calls signOut, then navigates to /login).
+// The project checkout page isn't in the nav; it's reached from a project card, and
+// the Projects tab stays highlighted there since it lives under /projects.
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-// Inline styles
-const barStyle = {
-  display: 'flex',
-  alignItems: 'center',
-  flexWrap: 'wrap',
-  gap: 16,
-  padding: '12px 16px',
-  background: '#fff',
-  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.12)',
-};
-
-const titleStyle = {
-  fontWeight: 700,
-  fontSize: 20,
-  color: '#bf5700',
-  textDecoration: 'none',
-};
-
-const userAreaStyle = {
-  marginLeft: 'auto',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-};
+const navLinkClass = ({ isActive }) => (isActive ? 'nav-link active' : 'nav-link');
 
 export default function Navbar() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
-  function handleLogout() {
-    signOut();
+  async function handleLogout() {
+    try {
+      await signOut();
+    } catch {
+      // Local auth state is cleared even when the server is unreachable.
+    }
     navigate('/login', { replace: true });
   }
 
   return (
-    <header style={barStyle}>
-      <Link to="/projects" style={titleStyle}>HaaS</Link>
-      <nav>
-        <Link to="/projects">My projects</Link>
-      </nav>
-      <div style={userAreaStyle}>
-        {user && (
-          <span className="muted">
-            Signed in as <strong>{user.userId}</strong>
-          </span>
-        )}
-        <button type="button" onClick={handleLogout}>Log out</button>
+    <header className="navbar">
+      <div className="navbar-inner">
+        <Link to="/projects" className="brand">HaaS</Link>
+        <nav className="nav-links" aria-label="Main">
+          <NavLink to="/projects" className={navLinkClass}>Projects</NavLink>
+          <NavLink to="/create-join" className={navLinkClass}>Create / Join</NavLink>
+        </nav>
+        <div className="nav-user">
+          {user && (
+            <span>
+              Signed in as <strong>{user.userId}</strong>
+            </span>
+          )}
+          <button type="button" className="secondary" onClick={handleLogout}>Log out</button>
+        </div>
       </div>
     </header>
   );

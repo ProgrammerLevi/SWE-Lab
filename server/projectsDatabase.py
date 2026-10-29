@@ -11,7 +11,8 @@ Project = {
     'projectId': projectId,
     'description': description,
     'hwSets': {HW1: 0, HW2: 10, ...},
-    'users': [user1, user2, ...]
+    'users': [user1, user2, ...],
+    'owner': hashed userId of the creator
 }
 '''
 # Database and collection names
@@ -45,8 +46,22 @@ def queryProject(client, projectId):
 
     return project
 
+# Function to query several projects at once, in the order of projectIds
+def queryProjects(client, projectIds):
+    found = {p['projectId']: p for p in getCollection(client).find({'projectId': {'$in': projectIds}})}
+    return [found[pid] for pid in projectIds if pid in found]
+
+# Helper function: the project's owner. Projects made before owners were stored
+# fall back to their first member, which is the creator
+def getOwner(project):
+    return project.get('owner') or next(iter(project.get('users') or []), None)
+
+def hasMember(client, projectId, userId):
+    project = queryProject(client, projectId)
+    return project is not None and userId in project.get('users', [])
+
 # Function to create a new project
-def createProject(client, projectName, projectId, description):
+def createProject(client, projectName, projectId, description, owner=None):
     # Create a new project in the database
     db = client["HardwareCheckout"]
     projects = db["Projects"]
@@ -61,7 +76,8 @@ def createProject(client, projectName, projectId, description):
         "projectId": projectId,
         "description": description,
         "hwSets": {},
-        "users": []
+        "users": [],
+        "owner": owner
     }
 
     # insert project
@@ -114,9 +130,9 @@ def updateUsage(client, projectId, hwSetName, delta):
 # Function to check out hardware for a project
 def checkOutHW(client, projectId, hwSetName, qty, userId):
     # Check out hardware for the specified project and update availability
-    if not isInt(qty) or qty <= 0 or not userId:
+    if not isInt(qty) or qty <= 0 or not userId or not hasMember(client, projectId, userId):
         return False
-    if queryProject(client, projectId) is None:
+    if not hasMember(client, projectId, userId):
         return False
 
     # Take the units from the hardware set (atomic, fails if not enough available)
@@ -132,7 +148,7 @@ def checkOutHW(client, projectId, hwSetName, qty, userId):
 # Function to check in hardware for a project
 def checkInHW(client, projectId, hwSetName, qty, userId):
     # Check in hardware for the specified project and update availability
-    if not isInt(qty) or qty <= 0 or not userId:
+    if not isInt(qty) or qty <= 0 or not userId or not hasMember(client, projectId, userId):
         return False
 
     # Remove the units from the project first (fails if it has fewer checked out)

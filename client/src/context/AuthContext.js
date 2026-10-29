@@ -1,7 +1,7 @@
 // Holds who is logged in. The backend has no sessions, so this is only a
 // client-side convenience: the userId is sent with each request that needs it.
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { login } from '../api/users';
+import { login, logout } from '../api/users';
 
 // sessionStorage key. For development you can fake a sign-in without the login page:
 //   sessionStorage.setItem('haas.user', JSON.stringify({ userId: 'al1' }))  then reload
@@ -39,9 +39,13 @@ export function AuthProvider({ children }) {
     writeStoredUser(next);
   }, []);
 
-  const signOut = useCallback(() => {
-    setUser(null);
-    writeStoredUser(null);
+  const signOut = useCallback(async () => {
+    try {
+      await logout();
+    } finally {
+      setUser(null);
+      writeStoredUser(null);
+    }
   }, []);
 
   const value = useMemo(() => ({ user, signIn, signOut }), [user, signIn, signOut]);

@@ -1,7 +1,8 @@
 # Import necessary libraries and modules
 import os
+from functools import wraps
 from bson.objectid import ObjectId
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, g, session, send_from_directory
 from pymongo import MongoClient
 
 # Import custom modules for database interactions
@@ -15,7 +16,13 @@ from encryption import protect_user_id
 from dotenv import load_dotenv
 load_dotenv()
 
-MONGODB_SERVER = os.environ.get("MONGODB_SERVER", "mongodb://localhost:27017")
+IS_LOCAL_DEVELOPMENT = os.environ.get("USE_MOCK_DB") == "1" or os.environ.get("FLASK_ENV") == "development"
+IS_PRODUCTION = not IS_LOCAL_DEVELOPMENT
+MONGODB_SERVER = os.environ.get("MONGODB_SERVER")
+if not MONGODB_SERVER:
+    if IS_PRODUCTION:
+        raise RuntimeError("MONGODB_SERVER must be configured in production")
+    MONGODB_SERVER = "mongodb://localhost:27017"
 
 # Enables secure SSL verification for MongoDB connections
 MONGODB_CA_FILE = os.environ.get("SSL_CERT_FILE")
@@ -30,8 +37,57 @@ if os.environ.get("USE_MOCK_DB"):
     def MongoClient(*args, **kwargs):
         return _mock_client
 
+# One shared client for the whole app. MongoClient keeps a pool of open connections,
+client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
+
 # Initialize a new Flask web application
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    static_folder=os.path.join(os.path.dirname(__file__), '..', 'client', 'build'),
+    static_url_path='',
+)
+app.config.update(
+    SECRET_KEY=os.environ.get("SESSION_SECRET"),
+    MAX_CONTENT_LENGTH=1 * 1024 * 1024,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=IS_PRODUCTION,
+)
+if IS_PRODUCTION and not os.environ.get("SESSION_SECRET"):
+    raise RuntimeError("SESSION_SECRET must be configured in production")
+if not app.config['SECRET_KEY']:
+    app.config['SECRET_KEY'] = "local-development-session-secret"
+
+
+def require_auth(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user_id"):
+            return jsonify({'success': False, 'message': 'Authentication required'}), 401
+        g.user_id = session['user_id']
+        return view(*args, **kwargs)
+    return wrapped
+
+
+@app.get('/health')
+def health():
+    try:
+        client.admin.command('ping')
+    except Exception:
+        return jsonify({'status': 'unavailable'}), 503
+    return jsonify({'status': 'ok'}), 200
+
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react(path):
+    if path.startswith(('login', 'add_user', 'main', 'join_project', 'get_', 'create_', 'check_', 'api/')):
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+    build_dir = app.static_folder
+    requested = os.path.join(build_dir, path)
+    if path and os.path.isfile(requested):
+        return send_from_directory(build_dir, path)
+    return send_from_directory(build_dir, 'index.html')
 
 # Helper function, checks if MongoDB document contains ObjectId in '_id'
 def clean_doc(doc):
@@ -42,28 +98,31 @@ def clean_doc(doc):
         doc['_id'] = str(doc['_id'])
     return doc
 
+# Helper function, cleans project documents and adds the owner's display name
+def with_owner_names(projects):
+    names = usersDB.getUsernames(client, {projectsDB.getOwner(p) for p in projects})
+    return [dict(clean_doc(p), ownerName=names.get(projectsDB.getOwner(p))) for p in projects]
+
 # Helper function, parse a positive number from request data
 def parse_qty(value):
     try:
         qty = int(value)
     except (TypeError, ValueError):
         return None
-    return qty if qty > 0 else None
+    return qty if 0 < qty <= 1000000 else None
+
+def valid_text(value, maximum=100):
+    return isinstance(value, str) and 0 < len(value.strip()) <= maximum
 
 DEFAULT_HW_SETS = {'HWSet1': 100, 'HWSet2': 100}
 
 def seed_hardware_sets():
-    client = None
     try:
-        client = MongoClient(MONGODB_SERVER, serverSelectionTimeoutMS=3000)
         for hwSetName, capacity in DEFAULT_HW_SETS.items():
             # does nothing if the set already exists, so availability isn't reset on restart
             hardwareDB.createHardwareSet(client, hwSetName, capacity)
     except Exception as e:
         print(f'Could not seed hardware sets: {e}')
-    finally:
-        if client is not None:
-            client.close()
 
 # runs on import so it works under gunicorn too; tests can set SKIP_SEED=1
 if not os.environ.get('SKIP_SEED'):
@@ -84,49 +143,37 @@ def login():
 
     # Hash the userId so it matches what's stored
     hashedId = protect_user_id(userId)
-    client = None
 
-    # Connect to MongoDB
     try:
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
         # Attempt to log in the user using the usersDB module
         success = usersDB.login(client, hashedId, password)
     # Catch error
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
+
     # Return a JSON response
     if success:
+        session['user_id'] = userId
         return jsonify({'success': True, 'message': 'Login successful', 'userId': userId}), 200
     else:
         return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
 
 # Route for the main page (Work in progress)
 @app.route('/main')
+@require_auth
 def mainPage():
     # Extract data from request (GET, so it comes from the query string: /main?userId=jb123)
-    userId = request.args.get('userId')
+    userId = g.user_id
 
     if not userId:
         return jsonify({'success': False, 'message': 'userId is required'}), 400
 
     hashedId = protect_user_id(userId)
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
-
         # Fetch user projects using the usersDB module
         projects = usersDB.getUserProjectsList(client, hashedId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
 
     # Return a JSON response
     if projects is None:
@@ -135,30 +182,23 @@ def mainPage():
 
 # Route for joining a project
 @app.route('/join_project', methods=['POST'])
+@require_auth
 def join_project():
     # Extract data from request
     data = request.get_json(silent=True) or {}
-    userId = data.get('userId')
+    userId = g.user_id
     projectId = data.get('projectId')
 
-    if not userId or not projectId:
+    if not projectId:
         return jsonify({'success': False,
                         'message': 'userId and projectId are required'}), 400
 
     hashedId = protect_user_id(userId)
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
-
         # Attempt to join the project using the usersDB module
         success = usersDB.joinProject(client, hashedId, projectId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
 
     # Return a JSON response
     if success:
@@ -181,19 +221,11 @@ def add_user():
                         'message': 'username, userId, and password are required'}), 400
 
     hashedId = protect_user_id(userId)
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
-
         # Attempt to add the user using the usersDB module
         success = usersDB.addUser(client, username, hashedId, password)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
 
     # Return a JSON response
     if success:
@@ -201,67 +233,87 @@ def add_user():
                         'username': username, 'userId': userId}), 201
     return jsonify({'success': False, 'message': 'That userId is already taken'}), 409
 
+
+@app.post('/logout')
+def logout():
+    session.clear()
+    return jsonify({'success': True}), 200
+
 # Route for getting the list of user projects
 @app.route('/get_user_projects_list', methods=['POST'])
+@require_auth
 def get_user_projects_list():
     # Extract data from request
     data = request.get_json(silent=True) or {}
-    userId = data.get('userId')
+    userId = g.user_id
  
     if not userId:
         return jsonify({'success': False, 'message': 'userId is required'}), 400
 
     hashedId = protect_user_id(userId)
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
-
         # Fetch the user's projects using the usersDB module
         projects = usersDB.getUserProjectsList(client, hashedId)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     if projects is None:
         return jsonify({'success': False, 'message': 'User not found'}), 404
     return jsonify({'success': True, 'projects': projects}), 200
 
+# Route for getting the user's projects with details, split into owned and shared
+@app.route('/get_user_projects', methods=['POST'])
+@require_auth
+def get_user_projects():
+    # Extract data from request
+    data = request.get_json(silent=True) or {}
+    userId = g.user_id
+
+    if not userId:
+        return jsonify({'success': False, 'message': 'userId is required'}), 400
+
+    hashedId = protect_user_id(userId)
+    try:
+        # Fetch the user's project IDs, then all of those projects in one query
+        projectIds = usersDB.getUserProjectsList(client, hashedId)
+        if projectIds is None:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        projects = with_owner_names(projectsDB.queryProjects(client, projectIds))
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
+
+    # Return a JSON response
+    owned = [p for p in projects if projectsDB.getOwner(p) == hashedId]
+    shared = [p for p in projects if projectsDB.getOwner(p) != hashedId]
+    return jsonify({'success': True, 'owned': owned, 'shared': shared}), 200
+
 # Route for creating a new project
 @app.route('/create_project', methods=['POST'])
+@require_auth
 def create_project():
     # Extract data from request
     data = request.get_json(silent=True) or {}
     projectName = data.get('projectName')
     projectId = data.get('projectId')
     description = data.get('description', '')
-    userId = data.get('userId')  # optional: the creator is added to the project
- 
+    userId = g.user_id
+
     if not projectName or not projectId:
         return jsonify({'success': False,
                         'message': 'projectName and projectId are required'}), 400
- 
-    client = None
+
+    owner = protect_user_id(userId)
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Attempt to create the project using the projectsDB module
-        success = projectsDB.createProject(client, projectName, projectId, description)
- 
+        success = projectsDB.createProject(client, projectName, projectId, description, owner)
+
         # If created and we know who made it, add the creator as a member
-        if success and userId:
-            usersDB.joinProject(client, protect_user_id(userId), projectId)
+        if success and not usersDB.joinProject(client, owner, projectId):
+            projectsDB.getCollection(client).delete_one({'projectId': projectId})
+            return jsonify({'success': False, 'message': 'Could not add project owner'}), 500
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     if success:
@@ -271,55 +323,46 @@ def create_project():
 
 # Route for getting project information
 @app.route('/get_project_info', methods=['POST'])
+@require_auth
 def get_project_info():
     # Extract data from request
     data = request.get_json(silent=True) or {}
     projectId = data.get('projectId')
  
-    if not projectId:
+    if not valid_text(projectId):
         return jsonify({'success': False, 'message': 'projectId is required'}), 400
  
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Fetch project information using the projectsDB module
         project = projectsDB.queryProject(client, projectId)
+        if project is not None:
+            project = with_owner_names([project])[0]
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
- 
+
     # Return a JSON response
     if project is None:
         return jsonify({'success': False, 'message': 'Project not found'}), 404
-    return jsonify({'success': True, 'project': clean_doc(project)}), 200
+    if not projectsDB.hasMember(client, projectId, protect_user_id(g.user_id)):
+        return jsonify({'success': False, 'message': 'Project access denied'}), 403
+    return jsonify({'success': True, 'project': project}), 200
 
 # Route for getting all hardware names
 @app.route('/get_all_hw_names', methods=['POST'])
+@require_auth
 def get_all_hw_names():
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Fetch all hardware names using the hardwareDB module
         hw_names = hardwareDB.getAllHwNames(client)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     return jsonify({'success': True, 'hwNames': hw_names or []}), 200
 
 # Route for getting hardware information
 @app.route('/get_hw_info', methods=['POST'])
+@require_auth
 def get_hw_info():
     # Extract data from request
     data = request.get_json(silent=True) or {}
@@ -328,19 +371,11 @@ def get_hw_info():
     if not hwSetName:
         return jsonify({'success': False, 'message': 'hwSetName is required'}), 400
  
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Fetch hardware set information using the hardwareDB module
         hw_set = hardwareDB.queryHardwareSet(client, hwSetName)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     if hw_set is None:
@@ -352,26 +387,23 @@ def get_hw_info():
 
 # Route for checking out hardware
 @app.route('/check_out', methods=['POST'])
+@require_auth
 def check_out():
     # Extract data from request
     data = request.get_json(silent=True) or {}
     projectId = data.get('projectId')
     hwSetName = data.get('hwSetName')
-    userId = data.get('userId')
+    userId = g.user_id
     qty = parse_qty(data.get('qty'))
  
-    if not projectId or not hwSetName or not userId:
+    if not projectId or not hwSetName:
         return jsonify({'success': False,
                         'message': 'projectId, hwSetName, and userId are required'}), 400
     if qty is None:
         return jsonify({'success': False,
                         'message': 'qty must be a positive whole number'}), 400
  
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Attempt to check out the hardware using the projectsDB module
         success = projectsDB.checkOutHW(client, projectId, hwSetName, qty, protect_user_id(userId))
  
@@ -379,10 +411,6 @@ def check_out():
         hw_set = hardwareDB.queryHardwareSet(client, hwSetName)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     availability = hw_set.get('availability') if hw_set else None
  
@@ -397,26 +425,23 @@ def check_out():
 
 # Route for checking in hardware
 @app.route('/check_in', methods=['POST'])
+@require_auth
 def check_in():
     # Extract data from request
     data = request.get_json(silent=True) or {}
     projectId = data.get('projectId')
     hwSetName = data.get('hwSetName')
-    userId = data.get('userId')
+    userId = g.user_id
     qty = parse_qty(data.get('qty'))
  
-    if not projectId or not hwSetName or not userId:
+    if not projectId or not hwSetName:
         return jsonify({'success': False,
                         'message': 'projectId, hwSetName, and userId are required'}), 400
     if qty is None:
         return jsonify({'success': False,
                         'message': 'qty must be a positive whole number'}), 400
  
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Attempt to check in the hardware using the projectsDB module
         success = projectsDB.checkInHW(client, projectId, hwSetName, qty, protect_user_id(userId))
  
@@ -424,10 +449,6 @@ def check_in():
         hw_set = hardwareDB.queryHardwareSet(client, hwSetName)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     availability = hw_set.get('availability') if hw_set else None
  
@@ -442,6 +463,7 @@ def check_in():
 
 # Route for creating a new hardware set
 @app.route('/create_hardware_set', methods=['POST'])
+@require_auth
 def create_hardware_set():
     # Extract data from request
     data = request.get_json(silent=True) or {}
@@ -454,19 +476,11 @@ def create_hardware_set():
         return jsonify({'success': False,
                         'message': 'initCapacity must be a positive whole number'}), 400
  
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
         # Attempt to create the hardware set using the hardwareDB module
         success = hardwareDB.createHardwareSet(client, hwSetName, initCapacity)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     if success:
@@ -478,20 +492,16 @@ def create_hardware_set():
 
 # Route for checking the inventory of projects
 @app.route('/api/inventory', methods=['GET'])
+@require_auth
 def check_inventory():
-    client = None
     try:
-        # Connect to MongoDB
-        client = MongoClient(MONGODB_SERVER, tlsCAFile=MONGODB_CA_FILE)
- 
-        # Fetch all projects
-        projects = [clean_doc(p) for p in client['HardwareCheckout']['Projects'].find({})]
+        user_id = protect_user_id(g.user_id)
+        projects = [
+            clean_doc(p)
+            for p in client['HardwareCheckout']['Projects'].find({'users': user_id})
+        ]
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-    finally:
-        # Close the MongoDB connection
-        if client is not None:
-            client.close()
  
     # Return a JSON response
     return jsonify({'success': True, 'projects': projects}), 200

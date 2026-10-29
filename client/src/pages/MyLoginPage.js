@@ -56,8 +56,8 @@ export default function MyLoginPage() {
   }
 
   return (
-    <main>
-      <h1>HaaS</h1>
+    <main className="container narrow">
+      <h1 style={{ marginBottom: 4 }}>HaaS</h1>
       <p className="muted">Hardware as a Service: check hardware in and out for your projects.</p>
 
       <form className="card" onSubmit={handleSubmit}>
@@ -77,10 +77,12 @@ export default function MyLoginPage() {
           onChange={setPassword}
           autoComplete="current-password"
         />
-        <button type="submit" disabled={busy}>{busy ? 'Signing in...' : 'Sign in'}</button>{' '}
-        <button type="button" onClick={() => setShowRegister(true)} disabled={busy}>
-          New User
-        </button>
+        <div className="form-actions">
+          <button type="submit" disabled={busy}>{busy ? 'Signing in...' : 'Sign in'}</button>
+          <button type="button" className="secondary" onClick={() => setShowRegister(true)} disabled={busy}>
+            New User
+          </button>
+        </div>
         {status && <p className={status.ok ? 'msg ok' : 'msg err'} role="status">{status.text}</p>}
       </form>
 
