@@ -53,13 +53,10 @@ export default function Project({ userId, onSelect }) {
       return;
     }
     run('join', async () => {
-      // Look the project up first so a typo says "Project not found"
-      const project = await getProject(projectId);
-
-      // The backend refuses to join a project you're already in, so only join if needed
       const mine = await getUserProjects(userId);
       if (!mine.includes(projectId)) await joinProject(userId, projectId);
 
+      const project = await getProject(projectId);
       setExistingId('');
       onSelect(project);
     });

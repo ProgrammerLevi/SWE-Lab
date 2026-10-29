@@ -7,3 +7,5 @@ export const login = (userId, password) => post('/login', { userId, password });
 // Rejects with "That userId is already taken" when the userId exists.
 export const addUser = (username, userId, password) =>
   post('/add_user', { username, userId, password });
+
+export const logout = () => post('/logout');

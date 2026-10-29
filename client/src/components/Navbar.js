@@ -13,8 +13,12 @@ export default function Navbar() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
-  function handleLogout() {
-    signOut();
+  async function handleLogout() {
+    try {
+      await signOut();
+    } catch {
+      // Local auth state is cleared even when the server is unreachable.
+    }
     navigate('/login', { replace: true });
   }
 
