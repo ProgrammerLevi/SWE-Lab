@@ -7,10 +7,11 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.6",
-    "react-scripts": "5.0.1"
+    "react-scripts": "5.0.1",
+    "serve": "^14.2.4"
   },
   "scripts": {
-    "start": "cd client && react-scripts start",
+    "start": "serve -s client/build -l $PORT",
     "build": "cd client && react-scripts build"
   },
   "browserslist": {
