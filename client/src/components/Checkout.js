@@ -4,18 +4,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { checkIn, checkOut, getAllHardwareSets } from '../api/hardware';
 import { getProject } from '../api/projects';
+import { StockMeter } from './HardwareSetList';
 
 const POLL_MS = 5000;
 const WHOLE_NUMBER = /^[1-9]\d*$/;
-
-const numStyle = { textAlign: 'right' };
-const qtyInputStyle = {
-  width: 70,
-  padding: 6,
-  border: '1px solid #c4ccd4',
-  borderRadius: 4,
-};
-const actionsStyle = { display: 'flex', gap: 8, flexWrap: 'wrap' };
 
 export default function Checkout({ projectId, userId }) {
   const [sets, setSets] = useState([]);
@@ -87,23 +79,24 @@ export default function Checkout({ projectId, userId }) {
 
   return (
     <section className="card">
-      <h2>Resource management</h2>
+      <h2>Check hardware in and out</h2>
 
       {sets.length === 0 ? (
         <p className="muted">
           No hardware sets found. Make sure the server is running and connected to the database.
         </p>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table>
+        <div className="table-wrap">
+          {/* data-label gives each number its heading on phones, where rows stack */}
+          <table className="checkout-table">
             <thead>
               <tr>
                 <th scope="col">Set</th>
-                <th scope="col" style={numStyle}>Capacity</th>
-                <th scope="col" style={numStyle}>Available</th>
-                <th scope="col" style={numStyle}>Checked out</th>
-                <th scope="col">Request</th>
-                <th scope="col">Actions</th>
+                <th scope="col" className="num">Capacity</th>
+                <th scope="col" className="num">Available</th>
+                <th scope="col" className="num">Checked out</th>
+                <th scope="col" className="num">Request</th>
+                <th scope="col" className="num">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -113,16 +106,19 @@ export default function Checkout({ projectId, userId }) {
                 return (
                   <tr key={set.hwName}>
                     <th scope="row">{set.hwName}</th>
-                    <td style={numStyle}>{set.capacity}</td>
-                    <td style={numStyle}>{set.availability}</td>
-                    <td style={numStyle}>{checkedOut}</td>
-                    <td>
-                      <label htmlFor={inputId} style={{ position: 'absolute', left: -9999 }}>
+                    <td className="num" data-label="Capacity">{set.capacity}</td>
+                    <td className="num" data-label="Available">
+                      {set.availability}
+                      <StockMeter availability={set.availability} capacity={set.capacity} />
+                    </td>
+                    <td className="num" data-label="Checked out">{checkedOut}</td>
+                    <td className="num">
+                      <label htmlFor={inputId} className="sr-only">
                         Units of {set.hwName}
                       </label>
                       <input
                         id={inputId}
-                        style={qtyInputStyle}
+                        className="qty-input"
                         inputMode="numeric"
                         placeholder="0"
                         value={requests[set.hwName] || ''}
@@ -131,12 +127,13 @@ export default function Checkout({ projectId, userId }) {
                       />
                     </td>
                     <td>
-                      <div style={actionsStyle}>
+                      <div className="actions">
                         <button type="button" onClick={() => handle(checkOut, set.hwName)} disabled={busy}>
                           Check out
                         </button>
                         <button
                           type="button"
+                          className="secondary"
                           onClick={() => handle(checkIn, set.hwName)}
                           disabled={busy || checkedOut === 0}
                         >
@@ -153,7 +150,7 @@ export default function Checkout({ projectId, userId }) {
       )}
 
       {status && <p className={status.ok ? 'msg ok' : 'msg err'} role="status">{status.text}</p>}
-      <p className="muted">"Checked out" is what this project holds. Numbers refresh every few seconds.</p>
+      <p className="muted small footnote">"Checked out" is what this project holds. Numbers refresh every few seconds.</p>
     </section>
   );
 }

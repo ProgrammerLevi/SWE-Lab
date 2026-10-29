@@ -1,11 +1,10 @@
-// Route /projects/:projectId.
-// Reads :projectId from the URL, loads the project with getProject to show its name
-// and description (not found -> message + link back), and renders <Navbar/> and
-// <Checkout projectId userId/> with userId from useAuth().
+// Route /projects/:projectId (not in the nav; reached from a project card).
+// Reads :projectId from the URL, loads the project with getProject to show its name,
+// owner and description (not found -> message + link back), and renders
+// <Checkout projectId userId/> with userId from useAuth(). The nav bar comes from AppLayout.
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Checkout from '../components/Checkout';
-import Navbar from '../components/Navbar';
 import { getProject } from '../api/projects';
 import { useAuth } from '../context/AuthContext';
 
@@ -29,38 +28,33 @@ export default function ProjectPage() {
     return () => { cancelled = true; };
   }, [projectId]);
 
-  let body;
+  const backLink = <Link to="/projects" className="back-link">&larr; Projects</Link>;
+
   if (loading) {
-    body = <p className="muted">Loading project...</p>;
-  } else if (error) {
-    body = (
-      <section className="card">
+    return <p className="muted">Loading project...</p>;
+  }
+  if (error) {
+    return (
+      <>
+        {backLink}
         <h1>Project unavailable</h1>
         <p className="msg err">{error}</p>
-        <p><Link to="/projects">Back to my projects</Link></p>
-      </section>
-    );
-  } else {
-    const memberCount = project.users?.length || 0;
-    body = (
-      <>
-        <p><Link to="/projects">&larr; My projects</Link></p>
-        <h1>{project.projectName}</h1>
-        <p className="muted">
-          Project ID: {project.projectId}
-          {project.ownerName && ` · Owner: ${project.ownerName}`}
-          {memberCount > 0 && ` · ${memberCount} member${memberCount === 1 ? '' : 's'}`}
-        </p>
-        {project.description && <p>{project.description}</p>}
-        <Checkout projectId={project.projectId} userId={user.userId} />
       </>
     );
   }
 
+  const memberCount = project.users?.length || 0;
   return (
     <>
-      <Navbar />
-      <main>{body}</main>
+      {backLink}
+      <h1>{project.projectName}</h1>
+      {project.description && <p>{project.description}</p>}
+      <dl className="details">
+        {project.ownerName && <div><dt>Owner</dt><dd>{project.ownerName}</dd></div>}
+        <div><dt>Members</dt><dd>{memberCount}</dd></div>
+        <div><dt>Project ID</dt><dd>{project.projectId}</dd></div>
+      </dl>
+      <Checkout projectId={project.projectId} userId={user.userId} />
     </>
   );
 }

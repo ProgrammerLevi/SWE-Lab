@@ -2,26 +2,26 @@ import React, { useState } from 'react';
 import FormField from './FormField';
 import { createProject, getProject, getUserProjects, joinProject } from '../api/projects';
 
-// "Create new project" and "Use existing project" forms (Figure 2 of the spec).
-// Owns only form state and feedback. Both actions are done on behalf of userId
-// (the creator / joiner becomes a project member), and once a project is ready
-// it is handed to the parent through onSelect(project).
+// "Create new project" and "Use existing project" forms (Figure 2 of the spec),
+// shown side by side. Owns only form state and feedback. Both actions are done on
+// behalf of userId (the creator / joiner becomes a project member), and once a
+// project is ready it is handed to the parent through onSelect(project).
 export default function Project({ userId, onSelect }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [newId, setNewId] = useState('');
   const [existingId, setExistingId] = useState('');
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState(null); // { ok: boolean, text: string }
+  const [status, setStatus] = useState(null); // { form: 'create' | 'join', ok: boolean, text: string }
 
-  // Runs an async action with shared busy/status handling
-  async function run(action) {
+  // Runs an async action for one form with shared busy/status handling
+  async function run(form, action) {
     setBusy(true);
     setStatus(null);
     try {
       await action();
     } catch (err) {
-      setStatus({ ok: false, text: err.message });
+      setStatus({ form, ok: false, text: err.message });
     } finally {
       setBusy(false);
     }
@@ -32,10 +32,10 @@ export default function Project({ userId, onSelect }) {
     const projectName = name.trim();
     const projectId = newId.trim();
     if (!projectName || !projectId) {
-      setStatus({ ok: false, text: 'Project name and project ID are required.' });
+      setStatus({ form: 'create', ok: false, text: 'Project name and project ID are required.' });
       return;
     }
-    run(async () => {
+    run('create', async () => {
       await createProject(projectName, projectId, description.trim(), userId);
       const project = await getProject(projectId);
       setName('');
@@ -49,10 +49,10 @@ export default function Project({ userId, onSelect }) {
     e.preventDefault();
     const projectId = existingId.trim();
     if (!projectId) {
-      setStatus({ ok: false, text: 'Enter a project ID.' });
+      setStatus({ form: 'join', ok: false, text: 'Enter a project ID.' });
       return;
     }
-    run(async () => {
+    run('join', async () => {
       // Look the project up first so a typo says "Project not found"
       const project = await getProject(projectId);
 
@@ -65,25 +65,36 @@ export default function Project({ userId, onSelect }) {
     });
   }
 
+  // Status message for one form, if it has one
+  const statusFor = (form) => status?.form === form && (
+    <p className={status.ok ? 'msg ok' : 'msg err'} role="status">{status.text}</p>
+  );
+
   return (
-    <section className="card">
-      <form onSubmit={handleCreate}>
+    <div className="grid-2">
+      <form className="card" onSubmit={handleCreate}>
         <h2>Create new project</h2>
+        <p className="muted">You'll own it. Teammates join with the project ID.</p>
         <FormField id="project-name" label="Name" value={name} onChange={setName} />
-        <FormField id="project-description" label="Description" value={description} onChange={setDescription} />
         <FormField id="project-new-id" label="Project ID" value={newId} onChange={setNewId} />
+        <FormField
+          id="project-description"
+          label="Description (optional)"
+          as="textarea"
+          value={description}
+          onChange={setDescription}
+        />
         <button type="submit" disabled={busy}>{busy ? 'Working...' : 'Create project'}</button>
+        {statusFor('create')}
       </form>
 
-      <hr />
-
-      <form onSubmit={handleUseExisting}>
-        <h2>Use existing project</h2>
+      <form className="card" onSubmit={handleUseExisting}>
+        <h2>Join existing project</h2>
+        <p className="muted">It will show up under Shared projects.</p>
         <FormField id="project-existing-id" label="Project ID" value={existingId} onChange={setExistingId} />
-        <button type="submit" disabled={busy}>{busy ? 'Working...' : 'Use project'}</button>
+        <button type="submit" disabled={busy}>{busy ? 'Working...' : 'Join project'}</button>
+        {statusFor('join')}
       </form>
-
-      {status && <p className={status.ok ? 'msg ok' : 'msg err'}>{status.text}</p>}
-    </section>
+    </div>
   );
 }

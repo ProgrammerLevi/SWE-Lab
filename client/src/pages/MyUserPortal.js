@@ -1,38 +1,52 @@
-// Route /projects. Project area from Figure 2 (needs a logged-in user):
-// the projects the user owns, the projects shared with them, the create /
-// use-existing project forms, and the hardware sets in the system (HWSet1 and
-// HWSet2, created by the server).
+// Route /projects. The projects the user owns, the projects shared with them,
+// and a sidebar with the hardware sets in the system (HWSet1 and HWSet2, created
+// by the server). Creating and joining projects lives on /create-join.
 // Everything shown here comes from the database; nothing is hard-coded.
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import HardwareSetList from '../components/HardwareSetList';
-import Navbar from '../components/Navbar';
-import Project from '../components/Project';
 import { getAllHardwareSets } from '../api/hardware';
 import { getProjectsByOwnership } from '../api/projects';
 import { useAuth } from '../context/AuthContext';
 
-// One section of projects. showOwner is off for "My projects", where the owner is always you.
-function ProjectSection({ title, projects, loading, error, emptyText, showOwner }) {
+const projectPath = (projectId) => `/projects/${encodeURIComponent(projectId)}`;
+
+// One list of projects as a table. The whole row opens the project; the name is
+// the real link so keyboard users can reach it. showOwner adds an Owner column
+// (left off for "My projects", where the owner is always you).
+function ProjectTable({ title, projects, empty, showOwner }) {
+  const navigate = useNavigate();
   return (
-    <section className="card">
+    <section className="section">
       <h2>{title}</h2>
-      {loading && <p className="muted">Loading...</p>}
-      {error && <p className="msg err">{error}</p>}
-      {!loading && !error && projects.length === 0 && <p className="muted">{emptyText}</p>}
-      {projects.length > 0 && (
-        <ul>
-          {projects.map((p) => (
-            <li key={p.projectId}>
-              <Link to={`/projects/${encodeURIComponent(p.projectId)}`}>
-                <strong>{p.projectName}</strong>
-              </Link>
-              <span className="muted"> ({p.projectId})</span>
-              {showOwner && <span className="muted"> · Owner: {p.ownerName || 'Unknown'}</span>}
-              {p.description && <div className="muted">{p.description}</div>}
-            </li>
-          ))}
-        </ul>
+      {projects.length === 0 ? (
+        <div className="empty">{empty}</div>
+      ) : (
+        <div className="table-wrap">
+          <table className="project-table">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">{showOwner ? 'Owner' : 'Project ID'}</th>
+                <th scope="col" className="num">Members</th>
+                <th scope="col" className="num">Units held</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.map((p) => {
+                const unitsHeld = Object.values(p.hwSets || {}).reduce((sum, n) => sum + n, 0);
+                return (
+                  <tr key={p.projectId} onClick={() => navigate(projectPath(p.projectId))}>
+                    <td><Link to={projectPath(p.projectId)}>{p.projectName}</Link></td>
+                    <td>{showOwner ? p.ownerName || 'Unknown' : p.projectId}</td>
+                    <td className="num">{p.users?.length || 0}</td>
+                    <td className="num">{unitsHeld}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );
@@ -40,7 +54,6 @@ function ProjectSection({ title, projects, loading, error, emptyText, showOwner 
 
 export default function MyUserPortal() {
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   const [projects, setProjects] = useState({ owned: [], shared: [] });
   const [projectsLoading, setProjectsLoading] = useState(true);
@@ -73,39 +86,44 @@ export default function MyUserPortal() {
   useEffect(() => { loadProjects(); }, [loadProjects]);
   useEffect(() => { loadHardware(); }, [loadHardware]);
 
-  return (
-    <>
-      <Navbar />
-      <main>
-        <h1>Projects</h1>
-
-        <ProjectSection
+  let projectsBody;
+  if (projectsLoading) {
+    projectsBody = <p className="muted">Loading projects...</p>;
+  } else if (projectsError) {
+    projectsBody = <p className="msg err">{projectsError}</p>;
+  } else {
+    projectsBody = (
+      <>
+        <ProjectTable
           title="My projects"
           projects={projects.owned}
-          loading={projectsLoading}
-          error={projectsError}
-          emptyText="You haven't created any projects yet. Create one below."
+          empty={<p>You haven't created a project yet. <Link to="/create-join">Create a project</Link></p>}
         />
-
-        <ProjectSection
+        <ProjectTable
           title="Shared projects"
           projects={projects.shared}
-          loading={projectsLoading}
-          error={projectsError}
-          emptyText="No one has shared a project with you yet. Use an existing project ID below to join one."
+          empty={<p>Nothing is shared with you yet. Ask a teammate for their project ID, then <Link to="/create-join">join it</Link>.</p>}
           showOwner
         />
+      </>
+    );
+  }
 
-        <Project
-          userId={user.userId}
-          onSelect={(project) => navigate(`/projects/${encodeURIComponent(project.projectId)}`)}
-        />
+  return (
+    <>
+      <div className="page-header">
+        <h1>Projects</h1>
+        <Link to="/create-join" className="button">New project</Link>
+      </div>
 
-        <section className="card">
-          <h2>Hardware sets</h2>
+      <div className="with-sidebar">
+        <div>{projectsBody}</div>
+
+        <aside>
+          <h2>Hardware</h2>
           {hwError ? <p className="msg err">{hwError}</p> : <HardwareSetList sets={hwSets} />}
-        </section>
-      </main>
+        </aside>
+      </div>
     </>
   );
 }
