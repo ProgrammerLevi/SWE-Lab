@@ -1,121 +1,42 @@
-# ECE 461L Project Info
-Software Engineering Team Project
-# Project Overview
+# HaaS – Hardware as a Service
 
-This project is a web application for managing users, projects, and shared resources. The application uses React for the front end, Flask for the back end, and MongoDB for data storage. The main functionality includes user authentication, project management, resource availability, resource checkout/check-in, and automated testing.
+ECE 461L team project. Users sign up, create or join projects, and check hardware (HWSet1 and HWSet2) in and out for their projects.
 
-## 1. Technology Stack
+Live app: _add Heroku URL here_
 
-This file is the main entry point of the application. It sets up the Flask web server and defines various routes for handling user requests.
+Stack: React (`client/`), Flask (`server/`), MongoDB, Pytest, Heroku.
 
-Front End: React.js
+## Running locally
 
-Back End: Python / Flask
+```bash
+pip install -r requirements.txt
+npm install
 
-Database: MongoDB
+cd server
+USE_MOCK_DB=1 python app.py   # in-memory database, no MongoDB needed
+```
 
-Testing: Pytest
+In a second terminal, from the repo root:
 
-Version Control: Git / GitHub
+```bash
+npm run dev
+```
 
-Deployment: Heroku
+Then open http://localhost:3000.
 
-## 2. Application Components
+To use a real database instead, put `MONGODB_SERVER=<connection string>` and `FLASK_ENV=development` in `server/.env` and run `python app.py`.
 
-**User Management:**
-Handles user accounts and authentication.
-Main functions:
+Heroku also needs `SESSION_SECRET` and `USERID_SECRET` set as config vars.
 
--Create a user account
+## Tests
 
--Log in and log out
+```bash
+cd server
+python -m pytest tests
+```
 
--Securely store user credentials
+The tests use the in-memory database and run automatically on every push and pull request.
 
--Authenticate users
+## Team
 
-**Project Management**
-Handles project creation and membership.
-Main functions:
-
--Create a new project
-
--Access an existing project
-
--Join a project using a project ID
-
--Store project name, description, and project ID
-
--Track users associated with a project
-
-**Resource Management**
-Handles the application's shared resources.
-Main functions:
-
--View resource capacity
-
--View current resource availability
-
--Request available resource units
-
--Check out resource units
-
--Reject requests exceeding available capacity
-
--Check resource units back in
-
--Prevent users from checking in more units than their project has checked out
-
--Update resource availability after checkout/check-in
-
-**Database**
-MongoDB stores persistent application data.
-Main data collections include:
-
--Users
-
--Projects
-
--Resources
-
-The database is accessed through the Flask API.
-
-**Back-end API**
-The Flask backend provides the API between the React front end and MongoDB.
-Main functions:
-
--Handle user authentication
-
--Manage users
-
--Create and access projects
-
--Manage project membership
-
--Check resource availability
-
--Process resource check-in and checkout
-
-**Front-end**
-The React front end provides the user interface for the application.
-Main screens/functionality include:
-
--User sign-in and account creation
-
--Project creation and access
-
--Project resource management
-
--Resource availability
-
--Resource check-in and checkout
-
-## 3. Testing
-Pytest is used for automated testing.
-Testing includes:
-
--API endpoints
-
--Database logic
-
--Check-in and checkout functionality
+Jake Barnett, Rafael Perales, Larry Nguyen, Esha Gajula, Tanya Sayooj, Marco Martinez
